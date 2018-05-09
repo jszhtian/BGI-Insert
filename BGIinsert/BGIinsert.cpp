@@ -71,14 +71,67 @@ bool checkfile(ScriptHeader check)
 DWORD getsizeofimage(DWORD* buf, int maxrange)
 {
 	int lastposition=-1;
+	/*
+	//For New End
 	for (int i=0;i<maxrange/4;i++)
 	{
-		if (buf[i]==0xF4)
+	if (buf[i]==0xF4)
+	{
+	lastposition = i;
+	}
+	}
+
+	*/
+
+	if (lastposition==-1)
+	{
+		for (int i = 0; i < maxrange / 4; i++)
 		{
-			lastposition = i;
+			if (buf[i] == 0x1b)
+			{
+				lastposition = i;
+			}
 		}
 	}
 	return lastposition;
+}
+
+wstring FixStringW(wstring& Line)
+{
+	wstring Name;
+	for (auto it : Line)
+	{
+		if (it == 0x000A)
+		{
+			Name += L"\\n";
+		}
+		else
+		{
+			Name += it;
+		}
+	}
+	return Name;
+}
+
+std::wstring ReplaceCR(const wstring& orignStr)
+{
+	size_t pos = 0;
+	wstring tempStr = orignStr;
+	wstring oldStr = L"\\n";
+	wstring newStr = L"\n";
+	wstring::size_type newStrLen = newStr.length();
+	wstring::size_type oldStrLen = oldStr.length();
+	while (true)
+	{
+		pos = tempStr.find(oldStr, pos);
+		if (pos == wstring::npos) break;
+
+		tempStr.replace(pos, oldStrLen, newStr);
+		pos += newStrLen;
+
+	}
+
+	return tempStr;
 }
 
 int main(int argc, char* argv[])
@@ -133,6 +186,11 @@ int main(int argc, char* argv[])
 			if (cmdptr[i] == 0x03)
 			{
 				char* text =  (char*)cmdptr+cmdptr[i+1];
+				char testchar = '\0';
+				if (memcmp(text - 1, &testchar, 1) != 0)
+				{
+					continue;
+				}
 				if ((USHORT)*text>0x7F)
 				{
 					if (*text!='_')
@@ -141,8 +199,9 @@ int main(int argc, char* argv[])
 						{
 							file2.open(fn, ios::out|ios::app);
 						}
-						wchar_t* filtertext = ctowJP(text);
-						char* outtext = wtocUTF8(filtertext);
+						wchar_t* filterwchar = ctowJP(text);
+						wstring filtertext = FixStringW(wstring(filterwchar));
+						char* outtext = wtocUTF8(filtertext.c_str());
 						string outputprefix;
 						string num = to_string(counter);
 						stringstream inter;
@@ -154,7 +213,7 @@ int main(int argc, char* argv[])
 						file2 << outputprefix << "//" << outtext << endl;
 						file2 << outputprefix << endl;
 						file2 << endl;
-						delete filtertext;
+						delete filterwchar;
 						delete outtext;
 						counter++;
 					}
@@ -180,10 +239,10 @@ int main(int argc, char* argv[])
 				chsblock block;
 				string num = proc.substr(1, 10);
 				block.order = stoll(num);
-				block.rawtext = ctowUTF8((char*)proc.substr(14).c_str());
+				block.rawtext = ReplaceCR(ctowUTF8((char*)proc.substr(14).c_str()));
 				//file3 >> proc;
 				getline(file3, proc);
-				block.transtext = ctowUTF8((char*)proc.substr(12).c_str());
+				block.transtext = ReplaceCR(ctowUTF8((char*)proc.substr(12).c_str()));
 				newtextlist.push_back(block);
 			}
 		}
@@ -196,6 +255,11 @@ int main(int argc, char* argv[])
 			if (cmdptr[i] == 0x03)
 			{
 				char* text = (char*)cmdptr + cmdptr[i + 1];
+				char testchar = '\0';
+				if (memcmp(text - 1, &testchar, 1) != 0)
+				{
+					continue;
+				}
 				if ((USHORT)*text > 0x7F)
 				{
 					if (*text != '_')
